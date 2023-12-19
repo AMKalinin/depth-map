@@ -1,111 +1,104 @@
 import cv2
 import math
-import numpy as np
+from tqdm import tqdm
 
 import matplotlib.pyplot as plt
 
+class depth_map:
+    def __init__(self, left_file_name, right_file_name, strob_size, step):
 
-def MAD(Im1, Im2):
-    size = len(Im1) # Размер стробов
-    N = size*size
-    result = abs(Im1-Im2)
-    result = result.sum()/N
-    return result
+        self.img_l = cv2.resize( cv2.imread(left_file_name, 0), (300,400))
+        self.img_r = cv2.resize( cv2.imread(right_file_name, 0), (300,400))
 
-def KOR(Im1, Im2):
-    size = len(Im1)
-    N = size*size
-    m1 = Im1.sum()/N
-    m2 = Im2.sum()/N
-    i1 = Im1 - m1
-    i2 = Im2 - m2
-    k = i1 * i2
-    return k.sum()/N
+        # self.img_l = cv2.imread(left_file_name, 0)
+        # self.img_r = cv2.imread(right_file_name, 0)
 
-def Row(ImL, ImR, size, row, step):
+        self.strob_size = strob_size
+        self.strob_n = strob_size**2
+        self.step = step
 
-    hight = ImL.shape[0]
-    width = ImL.shape[1]
+        self.height = self.img_l.shape[0]
+        self.width = self.img_l.shape[1]    
 
-    alpha = 81 * math.pi / 180  # rad
-    f = 5.23        # mm
-    base = 200      # mm
-    rad_na_pix = alpha/width  # rad/pixel
-    mm_px = f * math.tan(math.radians(40.5)) / (width / 2)
+        # Параметры камер
+        self.alpha = 81 * math.pi / 180  # rad
+        self.f = 5.23        # mm
+        self.base = 200      # mm
+        self.rad_na_pix = self.alpha/self.width  # rad/pixel
+        self.mm_px = self.f * math.tan(math.radians(40.5)) / (self.width / 2)
 
-    dist = []
+    def MAD(self, Im1, Im2):
+        result = abs(Im1-Im2)
+        result = result.sum()/self.strob_n
+        return result
+    
+    def KOR(self, Im1, Im2):
+        m1 = Im1.sum()/self.strob_n
+        m2 = Im2.sum()/self.strob_n
+        i1 = Im1 - m1
+        i2 = Im2 - m2
+        k = i1 * i2
+        return k.sum()/self.strob_n
 
-    for i in range(size // 2, width - size // 2 - 1, step):
-
-        
-
-        strob = ImL[row - size // 2 : row + size // 2 + 1, i - size // 2: i + size // 2 + 1]
+    def find_point_on_right(self, strob, row):
         response = []
-
         
-        for j in range(size // 2, width - size // 2 - 1):
+        min_value = math.inf
+        idx = 0
+
+        for j in range(self.strob_size // 2, self.width - self.strob_size // 2 - 1):
             
-            right = ImR[row - size // 2 : row + size // 2 + 1, j - size // 2: j + size // 2 + 1]
-            k = MAD(strob,right)     
+            right = self.img_r[row - self.strob_size // 2 : row + self.strob_size // 2 + 1, j - self.strob_size // 2: j + self.strob_size // 2 + 1]
+            k = self.MAD(strob,right)     
             response.append(k)
-        # plt.plot(response)
-        # plt.show()
-        m = response[0]
-        ind = 0
-        for t in range(len(response)):
-            if (response[t] <= m):
-                m = response[t]
-                ind = t
-        #print(i)
+            if (k <= min_value):
+                    min_value = k
+                    idx = len(response)-1
 
-        pol_width = width// 2  
-        d_l = (i - pol_width) * rad_na_pix
-        d_p = (pol_width - ind) * rad_na_pix
+        return idx
+    
+    def calc_dist(self, row, i):
+        strob = self.img_l[row - self.strob_size // 2 : row + self.strob_size // 2 + 1, i - self.strob_size // 2: i + self.strob_size // 2 + 1]
+                
+        idx = self.find_point_on_right(strob, row)
 
+        pol_width = self.width// 2  
+        d_l = (i - pol_width) * self.rad_na_pix
+        d_p = (pol_width - idx) * self.rad_na_pix
         
-
         phi1 = math.atan(d_l)
         phi2 = math.atan(d_p)
 
-        
-
         if (math.tan(phi1) + math.tan(phi2) != 0):
-            ds = (base / (math.tan(phi1) + math.tan(phi2))) / 1000
+            ds = (self.base / (math.tan(phi1) + math.tan(phi2))) / 1000
             if ds <=0:
-                dist.append(1.5)
+                ds = 1.5
             elif ds >=1.5:
-                dist.append(1.5)
-            else:
-                dist.append(ds)
+                ds = 1.5
         else :
-            dist.append(1.5)
+            ds = 1.5
         
-    return dist
+        return ds
 
+    def calc_depth_row(self, row):
 
-Left = cv2.imread('img/L.jpg', 0);
-Right = cv2.imread('img/R.jpg', 0);
-strob_size = 5 
-row_number = 725
-step = 3
+        dist = []
 
-# 605, 1080 книга угол
-#660 980 корона
+        for i in range(self.strob_size // 2, self.width - self.strob_size // 2 - 1, self.step):
+            dist.append(self.calc_dist(row, i))
+        return dist
 
-h = Left.shape[0]
-w = Left.shape[1]
+    def show_map(self):
+        plt.scatter(x=self.x, y=self.y, c=self.d, cmap="summer")
+        plt.colorbar(orientation="horizontal").set_label(label='Дальность',size=15,weight='bold')
+        plt.show()
 
-#d = Row(Left, Right, strob_size, row_number, step)
-d = []
-x = []
-y = []
-for i in range(strob_size//2, h-strob_size//2, step):
-    print(i)
-    y[len(x):] =  [h-i for k in range(strob_size//2,w-strob_size//2,step)]
-    x[len(y):] = [k for k in range(strob_size//2, w-strob_size//2, step)]
-    d[len(d):] = Row(Left, Right, strob_size, i, step)
-
-plt.scatter(x=x, y=y, c=d, cmap="summer")
-plt.colorbar(orientation="horizontal").set_label(label='Дальность',size=15,weight='bold')
-plt.show()
+    def calc_depth_map(self):
+        self.d = []
+        self.x = []
+        self.y = []
+        for i in tqdm(range(self.strob_size//2, self.height-self.strob_size//2, self.step)):
+            self.y[len(self.x):] =  [self.height-i for k in range(self.strob_size//2,self.width-self.strob_size//2,self.step)]
+            self.x[len(self.y):] = [k for k in range(self.strob_size//2, self.width-self.strob_size//2, self.step)]
+            self.d[len(self.d):] = self.calc_depth_row(i)
 
