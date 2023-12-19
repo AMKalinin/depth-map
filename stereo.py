@@ -28,11 +28,13 @@ class depth_map:
         self.mm_px = self.f * math.tan(math.radians(40.5)) / (self.width / 2)
 
     def MAD(self, Im1, Im2):
+        '''Функция отклонений'''
         result = abs(Im1-Im2)
         result = result.sum()/self.strob_n
         return result
     
     def KOR(self, Im1, Im2):
+        '''Корреляционная функция'''
         m1 = Im1.sum()/self.strob_n
         m2 = Im2.sum()/self.strob_n
         i1 = Im1 - m1
@@ -41,6 +43,7 @@ class depth_map:
         return k.sum()/self.strob_n
 
     def find_point_on_right(self, strob, row):
+        '''Поиск строба с левого изображения на правом'''
         response = []
         
         min_value = math.inf
@@ -58,6 +61,7 @@ class depth_map:
         return idx
     
     def calc_dist(self, row, i):
+        '''Вычисление расстояния по координатам точки на двух изображениях'''
         strob = self.img_l[row - self.strob_size // 2 : row + self.strob_size // 2 + 1, i - self.strob_size // 2: i + self.strob_size // 2 + 1]
                 
         idx = self.find_point_on_right(strob, row)
@@ -81,24 +85,30 @@ class depth_map:
         return ds
 
     def calc_depth_row(self, row):
+        '''Вычисления расстояния проход по строчке'''
 
         dist = []
 
-        for i in range(self.strob_size // 2, self.width - self.strob_size // 2 - 1, self.step):
+        for i in range(self.strob_size // 2, self.width - self.strob_size // 2, self.step):
             dist.append(self.calc_dist(row, i))
         return dist
 
     def show_map(self):
+        '''Вывод карты глубины'''
         plt.scatter(x=self.x, y=self.y, c=self.d, cmap="summer")
         plt.colorbar(orientation="horizontal").set_label(label='Дальность',size=15,weight='bold')
         plt.show()
 
     def calc_depth_map(self):
+        '''Вычисление карты глубины'''
         self.d = []
         self.x = []
         self.y = []
         for i in tqdm(range(self.strob_size//2, self.height-self.strob_size//2, self.step)):
-            self.y[len(self.x):] =  [self.height-i for k in range(self.strob_size//2,self.width-self.strob_size//2,self.step)]
+            self.y[len(self.x):] =  [self.height-i for k in range(self.strob_size//2, self.width-self.strob_size//2,self.step)]
             self.x[len(self.y):] = [k for k in range(self.strob_size//2, self.width-self.strob_size//2, self.step)]
             self.d[len(self.d):] = self.calc_depth_row(i)
+            # b = len(self.x)
+            # v = len(self.y)
+            # pp = len(self.d)
 
